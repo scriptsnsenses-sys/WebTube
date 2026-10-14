@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ytmusicapi player</title>
+<link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+<header>
+  <div class="brand">🎵 ytmusicapi player</div>
+  <div class="searchbar">
+    <input id="q" type="text" placeholder="Search songs, artists, albums… (e.g. Oasis Wonderwall)" />
+    <select id="filter">
+      <option value="">All</option>
+      <option value="songs">Songs</option>
+      <option value="videos">Videos</option>
+      <option value="albums">Albums</option>
+      <option value="artists">Artists</option>
+      <option value="playlists">Playlists</option>
+    </select>
+    <button id="searchBtn">Search</button>
+  </div>
+  <nav><a href="#" id="homeLink">Home</a> · <a href="/docs" target="_blank">API</a></nav>
+</header>
+
+<main id="main">
+  <div id="status"></div>
+  <section id="detail"></section>
+  <section id="results"></section>
+  <section id="home"></section>
+</main>
+
+<div id="player" class="hidden">
+  <div class="player-frame"><iframe id="ytframe" allow="autoplay; encrypted-media" allowfullscreen></iframe></div>
+  <div class="player-side">
+    <div id="nowPlaying" class="now-playing">Nothing playing</div>
+    <div class="player-btns">
+      <button id="lyricsBtn">Lyrics</button>
+      <button id="upnextBtn">Up next</button>
+      <button id="hideBtn">Hide</button>
+    </div>
+    <div id="upnext" class="upnext hidden"></div>
+    <pre id="lyrics" class="lyrics hidden"></pre>
+  </div>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

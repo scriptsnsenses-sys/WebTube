@@ -17,10 +17,12 @@ import json
 import os
 from dataclasses import asdict, is_dataclass
 from functools import lru_cache
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from ytmusicapi import YTMusic
 from ytmusicapi.exceptions import YTMusicServerError, YTMusicUserError
@@ -33,6 +35,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+if STATIC_DIR.is_dir():
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
 def _resolve_auth():
@@ -89,6 +95,14 @@ def _call(fn, *args, **kwargs):
 
 @app.get("/")
 def root():
+    index = STATIC_DIR / "index.html"
+    if index.is_file():
+        return FileResponse(str(index))
+    return {"service": "ytmusicapi-service", "health": "/health", "player": "static files missing"}
+
+
+@app.get("/api")
+def api_info():
     return {
         "service": "ytmusicapi-service",
         "docs": "/docs",
