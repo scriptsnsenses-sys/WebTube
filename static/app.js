@@ -1,197 +1,267 @@
-/* ytmusicapi player frontend — talks to the FastAPI service on the same origin. */
+/* YTMusic player — same-origin FastAPI backend. */
 const $ = (id) => document.getElementById(id);
 const statusEl = $("status"), resultsEl = $("results"), detailEl = $("detail"), homeEl = $("home");
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const thumb = (item, i = -1) => (item?.thumbnails?.length ? item.thumbnails[i < 0 ? item.thumbnails.length - 1 : i].url : "");
-const artistNames = (item) => (item?.artists || []).map((a) => a.name).join(", ");
 const setStatus = (t) => { statusEl.textContent = t || ""; };
+const artistNames = (it) => (it?.artists || []).map((a) => a.name).join(", ");
+const ytThumb = (vid) => vid ? `https://i.ytimg.com/vi/${vid}/hqdefault.jpg` : "";
+
+function thumbOf(it) {
+  if (!it) return "";
+  if (Array.isArray(it.thumbnails) && it.thumbnails.length) return it.thumbnails[it.thumbnails.length - 1].url;
+  const th = it.thumbnail;
+  if (typeof th === "string") return th;
+  if (th && Array.isArray(th.thumbnails) && th.thumbnails.length) return th.thumbnails[th.thumbnails.length - 1].url;
+  if (it.videoId) return ytThumb(it.videoId);
+  return "";
+}
 
 async function api(path) {
   const r = await fetch(path);
   if (!r.ok) {
     let msg = r.statusText;
     try { msg = (await r.json()).detail || msg; } catch { /* ignore */ }
-    throw new Error(`API ${r.status}: ${msg}`);
+    throw new Error(msg);
   }
   return r.json();
 }
 
-/* ---------- player ---------- */
-let currentVideoId = null;
-function play(videoId, title) {
+/* ---------- player state ---------- */
+let current = { videoId: null, title: "", sub: "" };
+let queueFor = null;
+
+function play(videoId, title, sub) {
   if (!videoId) return;
-  currentVideoId = videoId;
+  current = { videoId, title: title || videoId, sub: sub || "" };
+  queueFor = null;
   $("player").classList.remove("hidden");
+  $("sheet").classList.remove("hidden");
   $("ytframe").src = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`;
-  $("nowPlaying").textContent = "▶ " + (title || videoId);
-  $("lyrics").classList.add("hidden");
-  $("upnext").classList.add("hidden");
+  $("nowPlaying").textContent = current.title;
+  $("nowSub").textContent = current.sub;
+  $("ptumb").src = ytThumb(videoId);
+  showPane("upnext");
+  loadQueue(videoId);
 }
-$("hideBtn").onclick = () => { $("player").classList.add("hidden"); $("ytframe").src = ""; };
-$("lyricsBtn").onclick = async () => {
-  if (!currentVideoId) return;
-  setStatus("Loading lyrics…");
+function openSheet() { $("sheet").classList.remove("hidden"); }
+function showPane(which) {
+  $("tabQueue").classList.toggle("active", which === "upnext");
+  $("tabLyrics").classList.toggle("active", which === "lyrics");
+  $("upnext").classList.toggle("hidden", which !== "upnext");
+  $("lyrics").classList.toggle("hidden", which !== "lyrics");
+}
+$("tabQueue").onclick = () => { showPane("upnext"); if (current.videoId) loadQueue(current.videoId); };
+$("tabLyrics").onclick = () => { showPane("lyrics"); if (current.videoId) loadLyrics(current.videoId); };
+$("watchBtn").onclick = () => { $("sheet").classList.toggle("hidden"); };
+$("hideBtn").onclick = () => { $("player").classList.add("hidden"); $("sheet").classList.add("hidden"); $("ytframe").src = ""; current.videoId = null; };
+$("upnextBtn").onclick = () => { if (!current.videoId) return; openSheet(); showPane("upnext"); loadQueue(current.videoId); };
+$("lyricsBtn").onclick = () => { if (!current.videoId) return; openSheet(); showPane("lyrics"); loadLyrics(current.videoId); };
+
+async function loadQueue(videoId) {
+  if (queueFor === videoId && $("upnext").dataset.loaded) return;
   try {
-    const watch = await api(`/watch?videoId=${encodeURIComponent(currentVideoId)}&limit=1`);
-    const track = (watch.tracks || [])[0] || {};
-    const lyricsId = track.lyrics;
-    if (!lyricsId) throw new Error("No lyrics for this track");
-    const data = await api(`/lyrics?browseId=${encodeURIComponent(lyricsId)}`);
-    $("lyrics").textContent = data.lyrics || "No lyrics text";
-    $("lyrics").classList.remove("hidden");
-    setStatus("");
-  } catch (e) { setStatus(String(e.message || e)); }
-};
-$("upnextBtn").onclick = async () => {
-  if (!currentVideoId) return;
-  setStatus("Loading up next…");
+    const w = await api(`/watch?videoId=${encodeURIComponent(videoId)}&limit=25`);
+    queueFor = videoId;
+    $("upnext").dataset.loaded = "1";
+    $("upnext").innerHTML = (w.tracks || []).map((t) => `
+      <div class="qitem" data-vid="${esc(t.videoId || "")}" data-title="${esc(t.title || "")}" data-sub="${esc(artistNames(t))}">
+        <img loading="lazy" src="${esc(thumbOf(t))}"><div><b>${esc(t.title)}</b><span>${esc(artistNames(t))}</span></div>
+      </div>`).join("") || "<div class='qitem'>Queue is empty</div>";
+    $("upnext").querySelectorAll(".qitem[data-vid]").forEach((el) => {
+      el.onclick = () => play(el.dataset.vid, el.dataset.title, el.dataset.sub);
+    });
+  } catch (e) { $("upnext").innerHTML = `<div class="qitem">Queue failed: ${esc(e.message)}</div>`; }
+}
+
+async function loadLyrics(videoId) {
+  const box = $("lyrics");
+  box.textContent = "Loading lyrics…";
   try {
-    const watch = await api(`/watch?videoId=${encodeURIComponent(currentVideoId)}&limit=25`);
-    const box = $("upnext");
-    box.innerHTML = "<b>Up next</b>" + (watch.tracks || []).map((t) =>
-      `<div class="upnext-item" data-vid="${esc(t.videoId || "")}"><b>${esc(t.title)}</b><br><span>${esc(artistNames(t))}</span></div>`
-    ).join("");
-    box.classList.remove("hidden");
-    box.querySelectorAll("[data-vid]").forEach((el) =>
-      el.onclick = () => play(el.dataset.vid, el.textContent.trim()));
-    setStatus("");
-  } catch (e) { setStatus(String(e.message || e)); }
-};
+    const d = await api(`/lyrics?videoId=${encodeURIComponent(videoId)}`);
+    const text = Array.isArray(d.lyrics) ? d.lyrics.map((l) => l.text).join("\n") : (d.lyrics || "");
+    box.innerHTML = esc(text || "No lyrics text returned.") + (d.source ? `<span class="src">${esc(d.source)}</span>` : "");
+  } catch (e) { box.textContent = "Lyrics unavailable: " + e.message; }
+}
 
 /* ---------- search ---------- */
+document.querySelectorAll(".chip").forEach((c) => {
+  c.onclick = () => {
+    document.querySelectorAll(".chip").forEach((x) => x.classList.remove("active"));
+    c.classList.add("active");
+    if ($("q").value.trim()) doSearch();
+  };
+});
+const activeFilter = () => document.querySelector(".chip.active")?.dataset.filter || "";
+
 async function doSearch() {
   const q = $("q").value.trim();
   if (!q) return;
   detailEl.innerHTML = ""; homeEl.innerHTML = "";
   setStatus("Searching…");
   try {
-    const params = new URLSearchParams({ q, limit: 24 });
-    if ($("filter").value) params.set("filter", $("filter").value);
-    const items = await api("/search?" + params);
-    setStatus(`${items.length} result(s) for “${q}”`);
-    resultsEl.innerHTML = `<h2>Results</h2><div class="grid">` + items.map((it, i) =>
-      `<div class="card" data-idx="${i}"><img loading="lazy" src="${esc(thumb(it))}"><div class="t"><b>${esc(it.title)}</b><span>${esc(artistNames(it) || it.author || it.year || "")}</span><br><span class="badge">${esc(it.resultType || "")}</span></div></div>`
-    ).join("") + `</div>`;
-    resultsEl.querySelectorAll(".card").forEach((c) => { c.onclick = () => openResult(items[+c.dataset.idx]); });
-  } catch (e) { setStatus(String(e.message || e)); }
+    const p = new URLSearchParams({ q, limit: 24 });
+    if (activeFilter()) p.set("filter", activeFilter());
+    const items = await api("/search?" + p);
+    setStatus(items.length ? `${items.length} result(s) for “${q}”` : `No results for “${q}”`);
+    resultsEl.innerHTML = `<h2 class="shelf-title">Results</h2><div class="grid">` + items.map((it, i) => card(it, i)).join("") + `</div>`;
+    bindCards(resultsEl, items);
+  } catch (e) { setStatus("Search failed: " + e.message); }
 }
 $("searchBtn").onclick = doSearch;
 $("q").addEventListener("keydown", (e) => { if (e.key === "Enter") doSearch(); });
-$("homeLink").onclick = (e) => { e.preventDefault(); resultsEl.innerHTML = ""; detailEl.innerHTML = ""; loadHome(); };
+const goHome = (e) => { if (e) e.preventDefault(); resultsEl.innerHTML = ""; detailEl.innerHTML = ""; loadHome(); };
+$("homeLink").onclick = goHome;
+$("brandHome").onclick = goHome;
+
+function card(it, i) {
+  return `<button class="card" data-idx="${i}">
+    <span class="art"><img loading="lazy" src="${esc(thumbOf(it))}" alt=""><span class="veil"><span class="playdot">▶</span></span></span>
+    <span class="meta"><b>${esc(it.title)}</b><span>${esc(artistNames(it) || it.author || it.year || "")}</span><span class="badge">${esc(it.resultType || "")}</span></span>
+  </button>`;
+}
+function bindCards(root, items) {
+  root.querySelectorAll(".card").forEach((c) => { c.onclick = () => openResult(items[+c.dataset.idx]); });
+}
 
 function openResult(it) {
   const type = it.resultType;
-  if (type === "song" || type === "video") { play(it.videoId, `${it.title} — ${artistNames(it)}`); showSong(it.videoId); }
+  if (type === "song" || type === "video") play(it.videoId, it.title, artistNames(it));
   else if (type === "album") showAlbum(it.browseId);
   else if (type === "artist") showArtist(it.browseId);
   else if (type === "playlist") showPlaylist(String(it.browseId || "").replace(/^VL/, ""));
-  else if (it.videoId) play(it.videoId, it.title);
+  else if (it.videoId) play(it.videoId, it.title, artistNames(it));
   else if (it.browseId) showAlbum(it.browseId);
 }
 
 /* ---------- detail views ---------- */
-function trackTable(tracks) {
-  return `<table class="tracks"><tr><th>#</th><th>Title</th><th>Artists</th><th>Length</th></tr>` +
-    tracks.map((t, i) => `<tr data-vid="${esc(t.videoId || "")}"><td>${i + 1}</td><td>${esc(t.title)}</td><td>${esc(artistNames(t))}</td><td>${esc(t.duration || "")}</td></tr>`).join("") + `</table>`;
+function hero(kind, img, title, sub, firstVid, radioId) {
+  return `<div class="hero">
+    ${img ? `<img src="${esc(img)}" alt="">` : ""}
+    <div><div class="kicker">${esc(kind)}</div><h1>${esc(title)}</h1><div class="sub">${sub}</div>
+    <div class="actions">
+      ${firstVid ? `<button class="btn-primary" id="heroPlay">▶ Play</button>` : ""}
+      ${radioId ? `<button class="btn-ghost" id="heroRadio">Radio</button>` : ""}
+    </div></div>
+  </div>`;
 }
-function bindTracks(root) {
-  root.querySelectorAll("tr[data-vid]").forEach((tr) => {
-    tr.onclick = () => { if (tr.dataset.vid) play(tr.dataset.vid, tr.cells[1].textContent); };
+function trackRows(tracks) {
+  return `<div class="thead"><span>#</span><span></span><span>Title</span><span>Time</span></div>` + tracks.map((t, i) => `
+    <div class="trow" data-vid="${esc(t.videoId || "")}" data-title="${esc(t.title || "")}" data-sub="${esc(artistNames(t))}">
+      <span class="n">${i + 1}</span><img loading="lazy" src="${esc(thumbOf(t))}" alt="">
+      <span class="tt"><b>${esc(t.title)}</b><span>${esc(artistNames(t))}</span></span>
+      <span class="dur">${esc(t.duration || t.length || "")}</span>
+    </div>`).join("");
+}
+function bindRows(root) {
+  root.querySelectorAll(".trow[data-vid]").forEach((r) => {
+    r.onclick = () => { if (r.dataset.vid) play(r.dataset.vid, r.dataset.title, r.dataset.sub); };
   });
 }
-function head(img, title, sub) {
-  return `<div class="detail-head">${img ? `<img src="${esc(img)}">` : ""}<div><h2>${esc(title)}</h2><div>${sub || ""}</div></div></div>`;
-}
-
-async function showSong(videoId) {
-  setStatus("Loading song…");
-  try {
-    const s = await api(`/song/${encodeURIComponent(videoId)}`);
-    const d = s.videoDetails || {};
-    detailEl.innerHTML = head(thumb({ thumbnails: d.thumbnail?.thumbnails || [] }), d.title || "Song",
-      `${esc(d.author || "")} · ${esc(d.lengthSeconds ? Math.floor(d.lengthSeconds / 60) + ":" + String(d.lengthSeconds % 60).padStart(2, "0") : "")}`);
-    detailEl.scrollIntoView();
-    setStatus("");
-  } catch (e) { setStatus(String(e.message || e)); }
-}
+const firstVid = (tracks) => (tracks || []).find((t) => t.videoId)?.videoId || null;
 
 async function showAlbum(browseId) {
   setStatus("Loading album…");
   try {
     const a = await api(`/album/${encodeURIComponent(browseId)}`);
-    detailEl.innerHTML = head(thumb({ thumbnails: a.thumbnails || [] }), a.title || "Album",
-      `${esc(artistNames({ artists: a.artists }))} · ${esc(a.year || "")} · ${esc(a.trackCount || (a.tracks || []).length)} tracks`) + trackTable(a.tracks || []);
-    bindTracks(detailEl);
-    detailEl.scrollIntoView();
+    const tracks = a.tracks || [];
+    detailEl.innerHTML = hero("Album", thumbOf(a), a.title || "Album",
+      `${esc(artistNames({ artists: a.artists }))} · ${esc(a.year || "")} · ${tracks.length} songs`,
+      firstVid(tracks), null) + trackRows(tracks);
+    bindRows(detailEl);
+    const hp = $("heroPlay");
+    if (hp && tracks.length) hp.onclick = () => { const t = tracks.find((x) => x.videoId); play(t.videoId, t.title, artistNames(t)); };
+    detailEl.scrollIntoView({ behavior: "smooth" });
     setStatus("");
-  } catch (e) { setStatus(String(e.message || e)); }
+  } catch (e) { setStatus("Album failed: " + e.message); }
 }
 
 async function showArtist(channelId) {
   setStatus("Loading artist…");
   try {
     const a = await api(`/artist/${encodeURIComponent(channelId)}`);
-    let html = head(thumb({ thumbnails: a.thumbnails || [] }), a.name || a.title || "Artist", esc(a.subscribers || ""));
-    for (const sec of ["songs", "albums", "singles", "videos"]) {
-      const secData = a[sec];
-      const items = secData?.results || secData || [];
-      if (Array.isArray(items) && items.length) {
-        html += `<h3>${esc(secData?.title || sec)}</h3>`;
-        if (sec === "songs" || sec === "videos") { html += trackTable(items); }
-        else {
-          html += `<div class="grid">` + items.map((it) =>
-            `<div class="card" data-browse="${esc(it.browseId || "")}"><img loading="lazy" src="${esc(thumb(it))}"><div class="t"><b>${esc(it.title)}</b><span>${esc(it.year || "")}</span></div></div>`
-          ).join("") + `</div>`;
-        }
-      }
-    }
-    detailEl.innerHTML = html;
-    bindTracks(detailEl);
-    detailEl.querySelectorAll("[data-browse]").forEach((c) => { c.onclick = () => showAlbum(c.dataset.browse); });
-    detailEl.scrollIntoView();
+    const songs = a.songs?.results || a.songs || [];
+    detailEl.innerHTML = hero("Artist", thumbOf(a), a.name || a.title || "Artist", esc(a.subscribers || ""),
+      firstVid(songs), channelId) +
+      (songs.length ? `<h2 class="shelf-title">Top songs</h2>` + trackRows(songs.slice(0, 10)) : "") +
+      ["albums", "singles", "videos"].map((sec) => {
+        const s = a[sec]; const items = s?.results || s || [];
+        if (!Array.isArray(items) || !items.length) return "";
+        return `<h2 class="shelf-title">${esc(s?.title || sec)}</h2><div class="shelf-row">` +
+          items.map((it, i) => card(it, i)).join("") + `</div>`;
+      }).join("");
+    bindRows(detailEl);
+    detailEl.querySelectorAll(".shelf-row").forEach((row, ri) => {
+      const sec = ["albums", "singles", "videos"][ri];
+      const s = a[sec]; const items = s?.results || s || [];
+      row.querySelectorAll(".card").forEach((c) => {
+        const it = items[+c.dataset.idx];
+        c.onclick = () => {
+          if (it.videoId) play(it.videoId, it.title, artistNames(it));
+          else if (it.browseId) showAlbum(it.browseId);
+        };
+      });
+    });
+    const hp = $("heroPlay");
+    if (hp) hp.onclick = () => { const t = songs.find((x) => x.videoId); play(t.videoId, t.title, artistNames(t)); };
+    const hr = $("heroRadio");
+    if (hr) hr.onclick = async () => {
+      const t = songs.find((x) => x.videoId);
+      if (t) { const w = await api(`/watch?videoId=${encodeURIComponent(t.videoId)}&radio=true&limit=25`); if (w.tracks?.length) play(w.tracks[0].videoId, w.tracks[0].title, artistNames(w.tracks[0])); }
+    };
+    detailEl.scrollIntoView({ behavior: "smooth" });
     setStatus("");
-  } catch (e) { setStatus(String(e.message || e)); }
+  } catch (e) { setStatus("Artist failed: " + e.message); }
 }
 
 async function showPlaylist(playlistId) {
   setStatus("Loading playlist…");
   try {
     const p = await api(`/playlist/${encodeURIComponent(playlistId)}?limit=100`);
-    detailEl.innerHTML = head(thumb({ thumbnails: p.thumbnails || [] }), p.title || "Playlist",
-      `${esc(p.author?.name || "")} · ${esc(p.trackCount || (p.tracks || []).length)} tracks<br>${esc(p.description || "").slice(0, 200)}`) +
-      `<div><button class="small" id="radioBtn">▶ Radio from this playlist</button></div>` + trackTable(p.tracks || []);
-    bindTracks(detailEl);
-    const rb = $("radioBtn");
-    if (rb) rb.onclick = async () => {
+    const tracks = p.tracks || [];
+    detailEl.innerHTML = hero("Playlist", thumbOf(p), p.title || "Playlist",
+      `${esc(p.author?.name || "")} · ${esc(p.trackCount || tracks.length)} songs`,
+      firstVid(tracks), playlistId) + trackRows(tracks);
+    bindRows(detailEl);
+    const hp = $("heroPlay");
+    if (hp && tracks.length) hp.onclick = () => { const t = tracks.find((x) => x.videoId); play(t.videoId, t.title, artistNames(t)); };
+    const hr = $("heroRadio");
+    if (hr) hr.onclick = async () => {
       const w = await api(`/watch?playlistId=${encodeURIComponent(playlistId)}&limit=25`);
-      if (w.tracks?.length) play(w.tracks[0].videoId, w.tracks[0].title);
+      if (w.tracks?.length) play(w.tracks[0].videoId, w.tracks[0].title, artistNames(w.tracks[0]));
     };
-    detailEl.scrollIntoView();
+    detailEl.scrollIntoView({ behavior: "smooth" });
     setStatus("");
-  } catch (e) { setStatus(String(e.message || e)); }
+  } catch (e) { setStatus("Playlist failed: " + e.message); }
 }
 
-/* ---------- home ---------- */
+/* ---------- home shelves ---------- */
 async function loadHome() {
   setStatus("Loading home…");
   try {
     const rows = await api("/home?limit=3");
     homeEl.innerHTML = rows.map((row) =>
-      `<h2>${esc(row.title)}</h2><div class="grid">` + (row.contents || []).map((it) => {
-        const bid = esc(it.browseId || it.playlistId || "");
-        const vid = esc(it.videoId || "");
-        return `<div class="card" data-browse="${bid}" data-vid="${vid}"><img loading="lazy" src="${esc(thumb(it))}"><div class="t"><b>${esc(it.title)}</b><span>${esc(artistNames(it) || it.author || "")}</span></div></div>`;
+      `<h2 class="shelf-title">${esc(row.title)}</h2><div class="shelf-row">` + (row.contents || []).map((it) => {
+        const bid = it.browseId || it.playlistId || "";
+        return `<button class="card" data-browse="${esc(bid)}" data-vid="${esc(it.videoId || "")}">
+          <span class="art"><img loading="lazy" src="${esc(thumbOf(it))}" alt=""><span class="veil"><span class="playdot">▶</span></span></span>
+          <span class="meta"><b>${esc(it.title)}</b><span>${esc(artistNames(it) || "")}</span></span>
+        </button>`;
       }).join("") + `</div>`
     ).join("");
     homeEl.querySelectorAll(".card").forEach((c) => {
       c.onclick = () => {
-        if (c.dataset.vid) play(c.dataset.vid, c.textContent.trim());
-        else if (c.dataset.browse) (c.dataset.browse.startsWith("UC") ? showArtist : c.dataset.browse.startsWith("MPRE") ? showAlbum : showPlaylist)(c.dataset.browse.replace(/^VL/, ""));
+        if (c.dataset.vid) play(c.dataset.vid, c.textContent.trim().slice(0, 80), "");
+        else if (c.dataset.browse) {
+          const b = c.dataset.browse;
+          if (b.startsWith("UC")) showArtist(b);
+          else if (b.startsWith("MPRE")) showAlbum(b);
+          else showPlaylist(b.replace(/^VL/, ""));
+        }
       };
     });
     setStatus("");
-  } catch (e) { setStatus(String(e.message || e)); }
+  } catch (e) { setStatus("Home failed: " + e.message); }
 }
 
 loadHome();

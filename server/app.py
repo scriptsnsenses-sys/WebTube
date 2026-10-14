@@ -178,5 +178,19 @@ def watch(
 
 
 @app.get("/lyrics")
-def lyrics(browseId: str = Query(..., description="lyrics browseId from get_watch_playlist / get_album")):
-    return JSONResponse(_call(get_client().get_lyrics, browseId))
+def lyrics(
+    browseId: str | None = Query(None, description="lyrics browseId from get_watch_playlist (MPLYt...)"),
+    videoId: str | None = Query(None, description="videoId of the track — lyrics id is resolved automatically"),
+):
+    yt = get_client()
+    if not browseId and videoId:
+        watch = _call(yt.get_watch_playlist, videoId=videoId, limit=1)
+        browseId = (watch or {}).get("lyrics")
+        if not browseId:
+            raise HTTPException(status_code=404, detail="No lyrics available for this track")
+    if not browseId:
+        raise HTTPException(status_code=400, detail="Provide browseId or videoId")
+    data = _call(yt.get_lyrics, browseId)
+    if not data:
+        raise HTTPException(status_code=404, detail="No lyrics found for this track")
+    return JSONResponse(data)
