@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.venv/
+.venv*/
+venv*/
+.git/
+tests/
+docs/build/
+.coverage
+*.xml
+*.log

@@ -1,0 +1,5 @@
+# Hosting / service deps for Render + Docker.
+# Library itself only needs requests; the web wrapper needs fastapi + uvicorn.
+requests>=2.22
+fastapi>=0.110
+uvicorn[standard]>=0.29

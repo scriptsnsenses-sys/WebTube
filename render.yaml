@@ -1,0 +1,24 @@
+# Render Blueprint — one-click deploy of ytmusicapi-service.
+# Docs: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: ytmusicapi
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn server.app:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: YTMUSIC_LANGUAGE
+        value: en
+      # Optional auth: paste JSON or set a file path.
+      # For private/library endpoints only. Leave blank for public catalogue.
+      - key: YTMUSIC_AUTH
+        sync: false
+      - key: YTMUSIC_AUTH_FILE
+        sync: false
+      - key: YTMUSIC_LOCATION
+        sync: false
