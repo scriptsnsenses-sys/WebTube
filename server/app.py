@@ -41,6 +41,17 @@ if STATIC_DIR.is_dir():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
+@app.get("/manifest.webmanifest")
+def manifest():
+    return FileResponse(str(STATIC_DIR / "manifest.webmanifest"), media_type="application/manifest+json")
+
+
+@app.get("/sw.js")
+def service_worker():
+    # Must be served from the root scope so it can control the whole app.
+    return FileResponse(str(STATIC_DIR / "sw.js"), media_type="application/javascript")
+
+
 def _resolve_auth():
     # Explicit file var wins, else generic var (JSON string or path).
     auth_file = os.environ.get("YTMUSIC_AUTH_FILE")

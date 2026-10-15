@@ -246,13 +246,32 @@ h2.shelf-title { font-size: 1.1rem; font-weight: 700; margin: 26px 0 12px; }
 }
 
 @media (max-width: 760px) {
+  body { padding-bottom: calc(170px + env(safe-area-inset-bottom)); }
   .topbar { gap: 10px; padding: 0 12px; }
+  .brand span:last-child { display: none; }
   .topnav { display: none; }
+  .search-wrap { max-width: none; }
   .search-box { margin-left: 0; }
-  .recent { left: 0; right: 64px; }
-  .sheet { grid-template-columns: 1fr; max-height: 62vh; overflow-y: auto; bottom: 110px; }
+  .recent { left: 0; right: 60px; }
+  #searchBtn { width: 52px; }
+  .chips { padding: 10px 12px; top: 56px; }
+  .chip { padding: 10px 16px; }
+  .sheet { grid-template-columns: 1fr; max-height: 64vh; overflow-y: auto; bottom: calc(110px + env(safe-area-inset-bottom)); }
+  .hero { padding: 18px; }
   .hero img { width: 130px; height: 130px; }
   .hero h1 { font-size: 1.4rem; }
   main { padding: 12px; }
-  body { padding-bottom: 170px; }
+  .player { left: 8px; right: 8px; bottom: calc(8px + env(safe-area-inset-bottom)); padding: 8px 10px; gap: 10px; }
+  .player img { width: 48px; height: 48px; }
+  .p-btns { overflow-x: auto; }
+  .p-btns button { padding: 10px 14px; }
+  .trow { padding: 10px 8px; }
+  .dots { padding: 10px 14px; }
+  .card .meta b { font-size: 0.82rem; }
+}
+@media (max-width: 480px) {
+  .grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .shelf-row .card { flex-basis: 140px; }
+  .p-meta #nowSub { display: none; }
+  .modal-box { padding: 16px; }
 }

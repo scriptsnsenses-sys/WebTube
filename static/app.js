@@ -86,9 +86,34 @@ function loadCurrent() {
   $("nowSub").textContent = t.sub;
   $("ptumb").src = ytThumb(t.videoId);
   renderQueue();
+  bindMediaSession(t);
   if (ytPlayer && ytPlayer.loadVideoById) ytPlayer.loadVideoById(t.videoId);
   else if (ytReady) createPlayer(t.videoId);
   else { pendingVid = t.videoId; loadYTAPI(); }
+}
+/* lock-screen / background-tab controls (Media Session API) */
+let msBound = false;
+function bindMediaSession(t) {
+  if (!("mediaSession" in navigator)) return;
+  try {
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: t.title || "Unknown",
+      artist: t.sub || "YTMusic",
+      album: "YTMusic Player",
+      artwork: [{ src: ytThumb(t.videoId), sizes: "480x360", type: "image/jpeg" }],
+    });
+  } catch { /* ignore */ }
+  if (msBound) return;
+  msBound = true;
+  try {
+    navigator.mediaSession.setActionHandler("play", () => { try { ytPlayer.playVideo(); } catch { /* ignore */ } });
+    navigator.mediaSession.setActionHandler("pause", () => { try { ytPlayer.pauseVideo(); } catch { /* ignore */ } });
+    navigator.mediaSession.setActionHandler("previoustrack", goBack);
+    navigator.mediaSession.setActionHandler("nexttrack", advance);
+  } catch { /* ignore */ }
+}
+function goBack() {
+  if (qIndex > 0) { qIndex--; loadCurrent(); }
 }
 function advance() {
   if (qIndex + 1 < queue.length) { qIndex++; loadCurrent(); pushPlayed(queue[qIndex]); renderContinue(); }
