@@ -117,7 +117,7 @@ $("brandHome").onclick = goHome;
 function card(it, i) {
   return `<button class="card" data-idx="${i}">
     <span class="art"><img loading="lazy" src="${esc(thumbOf(it))}" alt=""><span class="veil"><span class="playdot">▶</span></span></span>
-    <span class="meta"><b>${esc(it.title)}</b><span>${esc(artistNames(it) || it.author || it.year || "")}</span><span class="badge">${esc(it.resultType || "")}</span></span>
+    <span class="meta"><b>${esc(it.title)}</b><span>${esc(artistNames(it) || it.author || "")}</span></span>
   </button>`;
 }
 function bindCards(root, items) {
