@@ -8,7 +8,7 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 const setStatus = (t) => { statusEl.textContent = t || ""; };
 const artistNames = (it) => (it?.artists || []).map((a) => a.name).join(", ");
 const ytThumb = (vid) => vid ? `https://i.ytimg.com/vi/${vid}/hqdefault.jpg` : "";
-const normTrack = (t) => ({ videoId: t.videoId, title: t.title || t.videoId, sub: artistNames(t) || t.author || "" });
+const normTrack = (t) => ({ videoId: t.videoId, title: t.title || t.videoId, sub: artistNames(t) || t.sub || t.author || "" });
 
 function thumbOf(it) {
   if (!it) return "";
@@ -22,7 +22,7 @@ function thumbOf(it) {
 /* "Artist • Album • 2:56 • 282M plays" like the reference */
 function subLine(t) {
   const parts = [];
-  const an = artistNames(t) || t.author || "";
+  const an = artistNames(t) || t.sub || t.author || "";
   if (an) parts.push(an);
   const al = t.album?.name || (typeof t.album === "string" ? t.album : "");
   if (al) parts.push(al);
@@ -115,7 +115,7 @@ function play(videoId, title, sub, list, idx) {
   $("upnext").dataset.loaded = "";
   loadCurrent();
   showPane("upnext");
-  pushPlayed(videoId, title, sub);
+  pushPlayed({ videoId, title: current.title, sub: current.sub });
   renderContinue();
 }
 function playNextTrack(t) {
@@ -143,8 +143,15 @@ async function loadRadio(videoId) {
   try {
     const w = await api(`/watch?videoId=${encodeURIComponent(videoId)}&limit=25`);
     queue = (w.tracks || []).map(normTrack).filter((t) => t.videoId);
+    if (!queue.length) throw new Error("Radio returned no tracks");
     qIndex = 0;
-    renderQueue();
+    $("player").classList.remove("hidden");
+    $("sheet").classList.remove("hidden");
+    $("upnext").dataset.loaded = "";
+    loadCurrent();
+    showPane("upnext");
+    pushPlayed(queue[0]);
+    renderContinue();
   } catch (e) { setStatus("Queue failed: " + e.message); }
 }
 
@@ -332,9 +339,8 @@ $("q").addEventListener("blur", () => { setTimeout(() => $("recentPanel").classL
 const RP_KEY = "ytm_recently_played";
 const getPlayed = () => { try { return JSON.parse(localStorage.getItem(RP_KEY)) || []; } catch { return []; } };
 function pushPlayed(t) {
-  const track = typeof t === "string" ? { videoId: t, title: t, sub: "" } : normTrack(t);
+  const track = normTrack(t || {});
   if (!track.videoId) return;
-  if (typeof t !== "string" && t.title) { track.title = t.title; track.sub = t.sub || track.sub; }
   const list = getPlayed().filter((x) => x.videoId !== track.videoId);
   list.unshift({ ...track, at: Date.now() });
   try { localStorage.setItem(RP_KEY, JSON.stringify(list.slice(0, 20))); } catch { /* ignore */ }
@@ -481,30 +487,22 @@ async function showArtist(channelId) {
   try {
     const a = await api(`/artist/${encodeURIComponent(channelId)}`);
     const songs = a.songs?.results || a.songs || [];
+    const secs = ["albums", "singles", "videos"]
+      .map((sec) => ({ sec, s: a[sec], items: a[sec]?.results || a[sec] || [] }))
+      .filter((x) => Array.isArray(x.items) && x.items.length);
     detailEl.innerHTML = hero("Artist", thumbOf(a), a.name || a.title || "Artist", esc(a.subscribers || ""),
       firstVid(songs), channelId) +
       (songs.length ? `<h2 class="shelf-title">Top songs</h2>` + trackRows(songs.slice(0, 10)) : "") +
-      ["albums", "singles", "videos"].map((sec) => {
-        const s = a[sec]; const items = s?.results || s || [];
-        if (!Array.isArray(items) || !items.length) return "";
-        return `<h2 class="shelf-title">${esc(s?.title || sec)}</h2><div class="shelf-row">` +
-          items.map((it, i) => card(it, i)).join("") + `</div>`;
-      }).join("");
+      secs.map((x) => `<h2 class="shelf-title">${esc(x.s?.title || x.sec)}</h2><div class="shelf-row">` +
+        x.items.map((it, i) => card(it, i)).join("") + `</div>`).join("");
     bindRows(detailEl, songs);
-    detailEl.querySelectorAll(".shelf-row").forEach((row, ri) => {
-      const sec = ["albums", "singles", "videos"][ri];
-      const s = a[sec]; const items = s?.results || s || [];
-      bindCards(row, items);
-    });
+    detailEl.querySelectorAll(".shelf-row").forEach((row, ri) => bindCards(row, secs[ri].items));
     const hp = $("heroPlay");
     if (hp) hp.onclick = () => { const t = songs.find((x) => x.videoId); play(t.videoId, t.title, artistNames(t), songs, songs.indexOf(t)); };
     const hr = $("heroRadio");
     if (hr) hr.onclick = async () => {
       const t = songs.find((x) => x.videoId);
-      if (t) {
-        play(t.videoId, t.title, artistNames(t));
-        await loadRadio(t.videoId);
-      }
+      if (t) await loadRadio(t.videoId);
     };
     detailEl.scrollIntoView({ behavior: "smooth" });
     setStatus("");
