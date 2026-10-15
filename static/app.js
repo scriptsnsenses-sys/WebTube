@@ -31,10 +31,71 @@ async function api(path) {
 let current = { videoId: null, title: "", sub: "" };
 let queueFor = null;
 
+/* ---------- recent searches (localStorage) ---------- */
+const RS_KEY = "ytm_recent_searches";
+const getRecents = () => { try { return JSON.parse(localStorage.getItem(RS_KEY)) || []; } catch { return []; } };
+function saveRecent(q) {
+  q = (q || "").trim();
+  if (!q) return;
+  const r = getRecents().filter((x) => x.toLowerCase() !== q.toLowerCase());
+  r.unshift(q);
+  try { localStorage.setItem(RS_KEY, JSON.stringify(r.slice(0, 10))); } catch { /* ignore */ }
+}
+function renderRecents() {
+  const panel = $("recentPanel");
+  const recents = getRecents();
+  panel.innerHTML = `<div class="recent-head">Recent searches</div>` + (recents.length ? recents.map((q, i) => `
+    <div class="recent-item" data-i="${i}">
+      <span class="clock">🕐</span><span class="txt">${esc(q)}</span><button class="rm" data-rm="${i}" title="Remove">✕</button>
+    </div>`).join("") : `<div class="recent-empty">No recent searches</div>`);
+  panel.querySelectorAll(".recent-item").forEach((el) => {
+    el.onclick = (e) => {
+      if (e.target.dataset.rm !== undefined) {
+        const r = getRecents();
+        r.splice(+e.target.dataset.rm, 1);
+        try { localStorage.setItem(RS_KEY, JSON.stringify(r)); } catch { /* ignore */ }
+        renderRecents();
+        return;
+      }
+      $("q").value = recents[+el.dataset.i];
+      panel.classList.add("hidden");
+      doSearch();
+    };
+  });
+}
+$("q").addEventListener("focus", () => { renderRecents(); $("recentPanel").classList.remove("hidden"); });
+$("q").addEventListener("click", () => { renderRecents(); $("recentPanel").classList.remove("hidden"); });
+$("q").addEventListener("blur", () => { setTimeout(() => $("recentPanel").classList.add("hidden"), 150); });
+
+/* ---------- continue listening (localStorage, newest first) ---------- */
+const RP_KEY = "ytm_recently_played";
+const getPlayed = () => { try { return JSON.parse(localStorage.getItem(RP_KEY)) || []; } catch { return []; } };
+function pushPlayed(videoId, title, sub) {
+  if (!videoId) return;
+  const list = getPlayed().filter((x) => x.videoId !== videoId);
+  list.unshift({ videoId, title: title || videoId, sub: sub || "", at: Date.now() });
+  try { localStorage.setItem(RP_KEY, JSON.stringify(list.slice(0, 20))); } catch { /* ignore */ }
+}
+function renderContinue() {
+  const box = $("continue");
+  const list = getPlayed();
+  if (!list.length) { box.innerHTML = ""; return; }
+  box.innerHTML = `<h2 class="shelf-title">Continue listening</h2><div class="shelf-row">` + list.map((t) => `
+    <button class="card" data-vid="${esc(t.videoId)}" data-title="${esc(t.title)}" data-sub="${esc(t.sub)}">
+      <span class="art"><img loading="lazy" src="${esc(ytThumb(t.videoId))}" alt=""><span class="veil"><span class="playdot">▶</span></span></span>
+      <span class="meta"><b>${esc(t.title)}</b><span>${esc(t.sub)}</span></span>
+    </button>`).join("") + `</div>`;
+  box.querySelectorAll(".card").forEach((c) => {
+    c.onclick = () => play(c.dataset.vid, c.dataset.title, c.dataset.sub);
+  });
+}
+
 function play(videoId, title, sub) {
   if (!videoId) return;
   current = { videoId, title: title || videoId, sub: sub || "" };
   queueFor = null;
+  pushPlayed(videoId, current.title, current.sub);
+  renderContinue();
   $("player").classList.remove("hidden");
   $("sheet").classList.remove("hidden");
   $("ytframe").src = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`;
@@ -97,6 +158,8 @@ const activeFilter = () => document.querySelector(".chip.active")?.dataset.filte
 async function doSearch() {
   const q = $("q").value.trim();
   if (!q) return;
+  saveRecent(q);
+  $("recentPanel").classList.add("hidden");
   detailEl.innerHTML = ""; homeEl.innerHTML = "";
   setStatus("Searching…");
   try {
@@ -264,4 +327,5 @@ async function loadHome() {
   } catch (e) { setStatus("Home failed: " + e.message); }
 }
 
+renderContinue();
 loadHome();
