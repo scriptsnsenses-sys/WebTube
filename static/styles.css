@@ -129,18 +129,19 @@ h2.shelf-title { font-size: 1.1rem; font-weight: 700; margin: 26px 0 12px; }
 .btn-ghost { border-radius: 999px; padding: 10px 22px; font-weight: 500; cursor: pointer; background: var(--surface2); color: var(--text); border: none; font-family: inherit; }
 .btn-ghost:hover { background: var(--hover); }
 
-/* ---------- track rows ---------- */
+/* ---------- song rows (reference: square thumb | Title / Artist • Album • time • plays) ---------- */
 .trow {
-  display: grid; grid-template-columns: 34px 46px 1fr auto; gap: 12px; align-items: center;
-  padding: 8px 12px; border-radius: 10px; cursor: pointer;
+  display: grid; grid-template-columns: 52px 1fr auto; gap: 14px; align-items: center;
+  padding: 9px 12px; border-radius: 10px; cursor: pointer;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 .trow:hover { background: var(--surface2); }
-.trow .n { color: var(--muted); font-size: 0.85rem; text-align: right; }
-.trow img { width: 46px; height: 46px; border-radius: 8px; object-fit: cover; background: var(--surface2); }
-.trow .tt b { display: block; font-size: 0.9rem; font-weight: 500; }
-.trow .tt span { color: var(--muted); font-size: 0.78rem; }
-.trow .dur { color: var(--muted); font-size: 0.8rem; }
-.thead { display: grid; grid-template-columns: 34px 46px 1fr auto; gap: 12px; padding: 8px 12px; color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 1px; }
+.trow img { width: 52px; height: 52px; border-radius: 6px; object-fit: cover; background: var(--surface2); }
+.trow .tt { min-width: 0; }
+.trow .tt b { display: block; font-size: 0.95rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.trow .tt span { color: var(--muted); font-size: 0.82rem; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dots { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 1.1rem; padding: 6px 10px; border-radius: 50%; }
+.dots:hover { color: var(--text); background: var(--hover); }
 
 /* ---------- bottom player ---------- */
 .player {
@@ -186,6 +187,63 @@ h2.shelf-title { font-size: 1.1rem; font-weight: 700; margin: 26px 0 12px; }
 #lyrics { white-space: pre-wrap; font-size: 0.88rem; line-height: 1.6; margin: 0; font-family: inherit; }
 .src { color: var(--muted); font-size: 0.75rem; margin-top: 10px; display: block; }
 .hidden { display: none !important; }
+
+/* ---------- video iframe (YT IFrame API) ---------- */
+#ytplayer iframe { width: 100%; aspect-ratio: 16/9; border: none; border-radius: 12px; background: #000; }
+.qitem.current { background: var(--red-dim); }
+.qitem.current b { color: var(--red2); }
+
+/* ---------- right-click context menu ---------- */
+.ctx {
+  position: fixed; z-index: 100; min-width: 180px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  padding: 6px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65);
+}
+.ctx button {
+  display: block; width: 100%; text-align: left;
+  background: none; border: none; color: var(--text); cursor: pointer;
+  padding: 10px 14px; border-radius: 8px; font-size: 0.88rem; font-family: inherit;
+}
+.ctx button:hover { background: var(--hover); }
+
+/* ---------- playlist picker modal ---------- */
+.modal {
+  position: fixed; inset: 0; z-index: 90;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+}
+.modal.hidden { display: none; }
+.modal-box {
+  width: 100%; max-width: 420px; max-height: 80vh; overflow-y: auto;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 20px;
+}
+.modal-box h3 { margin: 0 0 4px; }
+.pltarget { color: var(--muted); font-size: 0.82rem; margin-bottom: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.plrow {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: 10px; cursor: pointer;
+}
+.plrow:hover { background: var(--hover); }
+.plrow .plname { flex: 1; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.plrow .plcount { color: var(--muted); font-size: 0.78rem; }
+.plnew { display: flex; gap: 8px; margin: 12px 0; }
+.plnew input {
+  flex: 1; background: #121212; border: 1px solid var(--border); border-radius: 8px;
+  color: var(--text); padding: 9px 12px; outline: none; font-family: inherit; min-width: 0;
+}
+.plnew input:focus { border-color: var(--red); }
+.plnew button {
+  border: none; border-radius: 8px; padding: 9px 16px; cursor: pointer;
+  background: var(--red); color: #fff; font-weight: 700; font-family: inherit;
+}
+
+/* ---------- toast ---------- */
+.toast {
+  position: fixed; left: 50%; bottom: 100px; transform: translateX(-50%); z-index: 120;
+  background: var(--text); color: #000; font-size: 0.85rem; font-weight: 500;
+  border-radius: 8px; padding: 10px 20px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  max-width: 90vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 
 @media (max-width: 760px) {
   .topbar { gap: 10px; padding: 0 12px; }
