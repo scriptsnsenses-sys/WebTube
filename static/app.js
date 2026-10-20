@@ -1,4 +1,4 @@
-/* YTMusic player — same-origin FastAPI backend.
+/* WebTube player — same-origin FastAPI backend.
    Queue engine (YouTube IFrame API, auto-advance), user playlists (localStorage),
    right-click menu, recent searches, continue listening. */
 const $ = (id) => document.getElementById(id);
@@ -126,8 +126,8 @@ function bindMediaSession(t) {
   try {
     navigator.mediaSession.metadata = new MediaMetadata({
       title: t.title || "Unknown",
-      artist: t.sub || "YTMusic",
-      album: "YTMusic Player",
+      artist: t.sub || "YouTube Music",
+      album: "WebTube Music (powered by YouTube Music)",
       artwork: [{ src: ytThumb(t.videoId), sizes: "480x360", type: "image/jpeg" }],
     });
   } catch { /* ignore */ }
@@ -683,9 +683,11 @@ function setMode(next) {
   $("modeYt").classList.toggle("active", isYt);
   $("modeMusic").setAttribute("aria-selected", String(!isYt));
   $("modeYt").setAttribute("aria-selected", String(isYt));
-  $("brandLabel").innerHTML = isYt ? "YouTube<em>player</em>" : "YTMusic<em>player</em>";
-  $("q").placeholder = isYt ? "Search YouTube" : "Search";
-  document.title = isYt ? "YouTube Player" : "YTMusic Player";
+  $("brandLabel").innerHTML = isYt
+    ? "WebTube <em>(powered by YouTube)</em>"
+    : "WebTube Music <em>(powered by YouTube Music)</em>";
+  $("q").placeholder = isYt ? "Search WebTube" : "Search WebTube Music";
+  document.title = isYt ? "WebTube (powered by YouTube)" : "WebTube Music (powered by YouTube Music)";
   if (isYt) {
     suspendMusic();
     stopYtVideo();
@@ -720,7 +722,7 @@ function bindYtCards(root) {
   });
 }
 async function loadYtHome() {
-  setStatus("Loading YouTube…");
+  setStatus("Loading WebTube…");
   try {
     const data = await api("/yt/home");
     const sections = data.sections || [];
@@ -734,7 +736,7 @@ async function loadYtHome() {
     setStatus("");
   } catch (e) {
     ytHomeLoaded = false;
-    setStatus("YouTube home failed: " + e.message);
+    setStatus("WebTube home failed: " + e.message);
   }
 }
 function showYtHome(force = false) {
@@ -809,7 +811,7 @@ function renderYtVideo(video, related) {
     </div>
     <aside class="yt-related"><h3>Up next</h3><div class="yt-related-list">${relatedHtml}</div></aside>
   </div>`;
-  document.title = `${video.title || "Video"} - YouTube`;
+  document.title = `${video.title || "Video"} - WebTube`;
 
   const audioBtn = $("ytPlayAudio");
   if (audioBtn) {
@@ -846,7 +848,7 @@ async function doYtSearch() {
   ytWatchEl.innerHTML = "";
   ytWatchEl.classList.add("hidden");
   ytResultsEl.classList.remove("hidden");
-  setStatus("Searching YouTube…");
+  setStatus("Searching WebTube…");
   try {
     const params = new URLSearchParams({ q, filter: ytFilter, limit: 36 });
     const data = await api("/yt/search?" + params);
@@ -858,7 +860,7 @@ async function doYtSearch() {
     bindYtCards(ytResultsEl);
     window.scrollTo({ top: 0, behavior: "smooth" });
   } catch (e) {
-    setStatus("YouTube search failed: " + e.message);
+    setStatus("WebTube search failed: " + e.message);
   }
 }
 

@@ -1,7 +1,7 @@
 {
-  "name": "YTMusic Player",
-  "short_name": "YTMusic",
-  "description": "Search, play and queue music via ytmusicapi",
+  "name": "WebTube (powered by YouTube)",
+  "short_name": "WebTube",
+  "description": "WebTube Music and video player powered by YouTube Music and YouTube",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

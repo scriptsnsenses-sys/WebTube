@@ -3,30 +3,32 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-<title>YTMusic Player</title>
+<title>WebTube Music (powered by YouTube Music)</title>
 <meta name="theme-color" content="#0f0f0f" />
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<meta name="description" content="Search, play and queue music via ytmusicapi" />
+<meta name="application-name" content="WebTube" />
+<meta name="apple-mobile-web-app-title" content="WebTube" />
+<meta name="description" content="WebTube Music and video player powered by YouTube Music and YouTube" />
 <link rel="manifest" href="/manifest.webmanifest" />
 <link rel="icon" type="image/png" href="/static/icons/icon-192.png" />
 <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="/static/styles.css?v=6" />
+<link rel="stylesheet" href="/static/styles.css?v=7" />
 </head>
 <body>
 <header class="topbar">
-  <a class="brand" href="#" id="brandHome"><span class="logo">▶</span><span id="brandLabel">YTMusic<em>player</em></span></a>
+  <a class="brand" href="#" id="brandHome"><span class="logo">▶</span><span id="brandLabel">WebTube Music <em>(powered by YouTube Music)</em></span></a>
   <div class="mode-switch" role="tablist" aria-label="Player mode">
     <button id="modeMusic" class="mode-btn active" role="tab" aria-selected="true">Music</button>
     <button id="modeYt" class="mode-btn" role="tab" aria-selected="false">YouTube</button>
   </div>
   <div class="search-wrap">
     <div class="search-box">
-      <input id="q" type="text" placeholder="Search" autocomplete="off" />
+      <input id="q" type="text" placeholder="Search WebTube Music" autocomplete="off" />
     </div>
     <button id="searchBtn" title="Search">
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
@@ -120,6 +122,6 @@ if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {}));
 }
 </script>
-<script src="/static/app.js?v=6"></script>
+<script src="/static/app.js?v=7"></script>
 </body>
 </html>

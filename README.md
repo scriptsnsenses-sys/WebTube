@@ -1,11 +1,23 @@
-# YT Music free player and API
-The repo contains code that enables you to host and run efficiently, a web music player. Powered by Youtube Music.
+# WebTube (powered by YouTube)
+
+WebTube is a free, self-hostable web player powered by YouTube and YouTube Music through the open-source [`ytmusicapi`](https://github.com/sigma67/ytmusicapi) library.
+
+It has two modes:
+
+* **WebTube Music (powered by YouTube Music)** — search, stream, queue, and organize music.
+* **WebTube (powered by YouTube)** — browse the video home feed, search videos, and watch with related videos.
 
 ## What's Included
-* No ADs
-* Background Music
+* No ads
+* Background music
 * No download required
-* YouTube mode with video search, home feed, and a video watch page
+* WebTube Music mode with search, playback, playlists, queue, and lyrics
+* WebTube video mode with home feed, video search, a watch page, and related videos
+
+## Project Layout
+* `server/music.py` — YouTube Music routes powered by `ytmusicapi`.
+* `server/youtube.py` — standalone generic YouTube scraper and `/yt` routes.
+* `server/app.py` — shared FastAPI app, static shell, and API metadata.
 
 ## API
 Endpoints:
@@ -23,8 +35,8 @@ Search for songs
 (GET) /home
 Shows top 50 songs. These songs were last updated by the library owner not me so these are outdated. Consider updating them or wait for me to update.
 
-(GET) /artist/{chanel_id}
-Artist's chanel ID
+(GET) /artist/{channel_id}
+Artist's channel ID
 
 (GET) /song/{video_id}
 Play a song
@@ -39,7 +51,7 @@ Watch a music video
 Fetch the lyrics.
 
 (GET) /yt/home
-YouTube mode home feed (trending videos, new videos, podcasts)
+WebTube video mode home feed (trending, technology, gaming, news, comedy, sports, and trailers)
 
 (GET) /yt/search
 Search YouTube videos or songs
@@ -47,26 +59,26 @@ Search YouTube videos or songs
 (GET) /yt/video/{video_id}
 Video details and related videos for the watch page
 ```
-Complete docs at the /docs endpoint, or you can use my hosted version: https://ytmusicapi-83b8.onrender.com/docs
+Complete docs at the `/docs` endpoint, or use the hosted WebTube instance: https://ytmusicapi-83b8.onrender.com/docs
 
-My hosted version URL: https://ytmusicapi-83b8.onrender.com
-{You can use it for free forever unlimited}
+Hosted WebTube URL: https://ytmusicapi-83b8.onrender.com
+{You can use it for free forever, unlimited}
 
-**Note: The software is hosted on Render and it falls asleep every 15 mins without interactivity so it may take some extra time around 30-50 sec to respond for the first query, after it no such extra delays. Upon opening the software in your browser, you may have to wait for the program to wake up. Sorry for misconvinience.**
+**Note: WebTube is hosted on Render and falls asleep after 15 minutes without activity. The first request may take around 30–50 seconds while the app wakes up; later requests are fast. Sorry for the inconvenience.**
 
 Credits:
 ```
 sigma67/ytmusicapi:
 * API
 * Framework
-* YT Music backend
+* YouTube Music backend
 
-This software is a fork of this repo, make sure to check out the original version.
+WebTube is a fork of this repo, make sure to check out the original version.
 
 Link:
 https://github.com/sigma67/ytmusicapi
 ```
 
-**Software licensed as MIT. Feel free to modify and make your versions of the software.**
+**Software licensed as MIT. Feel free to modify and make your own versions of WebTube.**
 
 _Happy Coding_

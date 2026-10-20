@@ -1,9 +1,9 @@
-/* YTMusic Player service worker — app-shell caching only. API calls pass through. */
-const CACHE = "ytm-shell-v2";
+/* WebTube service worker — app-shell caching only. API calls pass through. */
+const CACHE = "webtube-shell-v3";
 const SHELL = [
   "/",
-  "/static/styles.css?v=6",
-  "/static/app.js?v=6",
+  "/static/styles.css?v=7",
+  "/static/app.js?v=7",
   "/manifest.webmanifest",
   "/static/icons/icon-192.png",
   "/static/icons/icon-512.png",

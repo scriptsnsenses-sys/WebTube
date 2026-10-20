@@ -1,4 +1,4 @@
-# Render Blueprint — one-click deploy of ytmusicapi-service.
+# Render Blueprint — one-click deploy of WebTube.
 # Docs: https://render.com/docs/blueprint-spec
 services:
   - type: web
