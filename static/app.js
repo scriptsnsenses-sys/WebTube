@@ -3,6 +3,8 @@
    right-click menu, recent searches, continue listening. */
 const $ = (id) => document.getElementById(id);
 const statusEl = $("status"), resultsEl = $("results"), detailEl = $("detail"), homeEl = $("home");
+const musicViewEl = $("musicView"), youtubeViewEl = $("youtubeView");
+const ytHomeEl = $("ytHome"), ytResultsEl = $("ytResults"), ytWatchEl = $("ytWatch");
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const setStatus = (t) => { statusEl.textContent = t || ""; };
@@ -32,6 +34,32 @@ function subLine(t) {
   if (v && typeof v === "string" && !/plays?$/i.test(v) && !/^\d+$/.test(v)) v += " plays";
   if (v) parts.push(v);
   return parts.join(" • ");
+}
+function compactNumber(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return String(value ?? "");
+  if (n >= 1e9) return (n / 1e9).toFixed(1).replace(/\.0$/, "") + "B";
+  if (n >= 1e6) return (n / 1e6).toFixed(1).replace(/\.0$/, "") + "M";
+  if (n >= 1e3) return (n / 1e3).toFixed(1).replace(/\.0$/, "") + "K";
+  return String(n);
+}
+function viewText(value) {
+  if (value === null || value === undefined || value === "") return "";
+  const text = String(value);
+  if (/^\d+$/.test(text)) return compactNumber(text) + " views";
+  if (/^\d+(?:\.\d+)?\s*[KMB]$/i.test(text)) return text + " views";
+  return text;
+}
+function dateText(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+function durationText(video) {
+  if (!video) return "";
+  if (video.isLive || video.duration === "LIVE") return "LIVE";
+  return video.duration || "";
 }
 
 async function api(path) {
@@ -386,16 +414,17 @@ function renderContinue() {
 }
 
 /* ================= search ================= */
-document.querySelectorAll(".chip").forEach((c) => {
+document.querySelectorAll("#chips .chip").forEach((c) => {
   c.onclick = () => {
-    document.querySelectorAll(".chip").forEach((x) => x.classList.remove("active"));
+    document.querySelectorAll("#chips .chip").forEach((x) => x.classList.remove("active"));
     c.classList.add("active");
     if ($("q").value.trim()) doSearch();
   };
 });
-const activeFilter = () => document.querySelector(".chip.active")?.dataset.filter || "";
+const activeFilter = () => document.querySelector("#chips .chip.active")?.dataset.filter || "";
 
 async function doSearch() {
+  if (mode === "youtube") return doYtSearch();
   const q = $("q").value.trim();
   if (!q) return;
   saveRecent(q);
@@ -413,7 +442,19 @@ async function doSearch() {
 }
 $("searchBtn").onclick = doSearch;
 $("q").addEventListener("keydown", (e) => { if (e.key === "Enter") doSearch(); });
-const goHome = (e) => { if (e) e.preventDefault(); resultsEl.innerHTML = ""; detailEl.innerHTML = ""; renderContinue(); loadHome(); };
+function musicHome() {
+  resultsEl.innerHTML = ""; detailEl.innerHTML = "";
+  renderContinue(); loadHome();
+}
+const goHome = (e) => {
+  if (e) e.preventDefault();
+  if (mode === "youtube") {
+    if (location.hash !== "#yt") pushRoute("yt");
+    showYtHome();
+    return;
+  }
+  musicHome();
+};
 $("homeLink").onclick = goHome;
 $("brandHome").onclick = goHome;
 
@@ -594,5 +635,280 @@ async function loadHome() {
   } catch (e) { setStatus("Home failed: " + e.message); }
 }
 
-renderContinue();
-loadHome();
+/* ================= YouTube mode ================= */
+const MODE_KEY = "ytm_mode";
+let mode = "music";
+let ytFilter = "videos";
+let ytHomeLoaded = false;
+let musicViewReady = false;
+let musicWasPlaying = false;
+
+function pushRoute(hash) {
+  if (location.hash === "#" + hash) return;
+  history.pushState(null, "", "#" + hash);
+}
+function suspendMusic() {
+  try {
+    musicWasPlaying = !!(ytPlayer?.getPlayerState && ytPlayer.getPlayerState() === window.YT?.PlayerState?.PLAYING);
+  } catch { musicWasPlaying = false; }
+  try { ytPlayer?.pauseVideo?.(); } catch { /* ignore */ }
+  $("player").classList.add("hidden");
+  $("sheet").classList.add("hidden");
+}
+function resumeMusic() {
+  if (queue.length && qIndex >= 0) {
+    $("player").classList.remove("hidden");
+    if (musicWasPlaying) {
+      try { ytPlayer?.playVideo?.(); } catch { /* ignore */ }
+    }
+  }
+  musicWasPlaying = false;
+}
+function stopYtVideo() {
+  ytWatchEl.innerHTML = "";
+  ytWatchEl.classList.add("hidden");
+}
+function setMode(next) {
+  if (next === mode) return;
+  mode = next;
+  try { localStorage.setItem(MODE_KEY, mode); } catch { /* ignore */ }
+  const isYt = mode === "youtube";
+  document.body.classList.toggle("yt-mode", isYt);
+  musicViewEl.classList.toggle("hidden", isYt);
+  youtubeViewEl.classList.toggle("hidden", !isYt);
+  $("chips").classList.toggle("hidden", isYt);
+  $("ytChips").classList.toggle("hidden", !isYt);
+  $("libLink").classList.toggle("hidden", isYt);
+  $("modeMusic").classList.toggle("active", !isYt);
+  $("modeYt").classList.toggle("active", isYt);
+  $("modeMusic").setAttribute("aria-selected", String(!isYt));
+  $("modeYt").setAttribute("aria-selected", String(isYt));
+  $("brandLabel").innerHTML = isYt ? "YouTube<em>player</em>" : "YTMusic<em>player</em>";
+  $("q").placeholder = isYt ? "Search YouTube" : "Search";
+  document.title = isYt ? "YouTube Player" : "YTMusic Player";
+  if (isYt) {
+    suspendMusic();
+    stopYtVideo();
+    ytHomeEl.classList.remove("hidden");
+    ytResultsEl.innerHTML = "";
+    ytResultsEl.classList.add("hidden");
+  } else {
+    stopYtVideo();
+    ytHomeEl.innerHTML = "";
+    ytResultsEl.innerHTML = "";
+    ytHomeLoaded = false;
+    resumeMusic();
+    renderContinue();
+  }
+  setStatus("");
+}
+function ytBadge(video) {
+  const text = durationText(video);
+  if (!text) return "";
+  return `<span class="yt-badge${text === "LIVE" ? " live" : ""}">${esc(text)}</span>`;
+}
+function ytCard(video) {
+  const meta = [video.channel, viewText(video.views)].filter(Boolean).join(" • ");
+  return `<button class="yt-card" data-vid="${esc(video.videoId)}">
+    <span class="yt-thumb"><img loading="lazy" src="${esc(video.thumbnail || ytThumb(video.videoId))}" alt="">${ytBadge(video)}</span>
+    <span class="yt-info"><b>${esc(video.title)}</b><span>${esc(meta)}</span></span>
+  </button>`;
+}
+function bindYtCards(root) {
+  root.querySelectorAll(".yt-card[data-vid]").forEach((card) => {
+    card.onclick = () => openYtVideo(card.dataset.vid);
+  });
+}
+async function loadYtHome() {
+  setStatus("Loading YouTube…");
+  try {
+    const data = await api("/yt/home");
+    const sections = data.sections || [];
+    ytHomeEl.innerHTML = sections.length ? sections.map((section) => `
+      <section class="yt-section">
+        <h2 class="yt-section-title">${esc(section.title)}</h2>
+        <div class="yt-row">${(section.videos || []).map(ytCard).join("")}</div>
+      </section>`).join("") : `<div class="yt-empty">No videos returned. Try searching above.</div>`;
+    bindYtCards(ytHomeEl);
+    ytHomeLoaded = true;
+    setStatus("");
+  } catch (e) {
+    ytHomeLoaded = false;
+    setStatus("YouTube home failed: " + e.message);
+  }
+}
+function showYtHome(force = false) {
+  if (mode !== "youtube") setMode("youtube");
+  ytWatchEl.innerHTML = "";
+  ytWatchEl.classList.add("hidden");
+  ytResultsEl.innerHTML = "";
+  ytResultsEl.classList.add("hidden");
+  ytHomeEl.classList.remove("hidden");
+  if (force || !ytHomeLoaded) loadYtHome();
+  else setStatus("");
+}
+function openYtVideo(videoId) {
+  if (!videoId) return;
+  if (mode !== "youtube") setMode("youtube");
+  pushRoute("yt/" + encodeURIComponent(videoId));
+  loadYtVideo(videoId);
+}
+function ytRelCard(video) {
+  const meta = [video.channel, viewText(video.views)].filter(Boolean).join(" • ");
+  return `<button class="yt-rel" data-vid="${esc(video.videoId)}">
+    <span class="yt-thumb"><img loading="lazy" src="${esc(video.thumbnail || ytThumb(video.videoId))}" alt="">${ytBadge(video)}</span>
+    <span class="yt-rel-info"><b>${esc(video.title)}</b><span>${esc(meta)}</span></span>
+  </button>`;
+}
+async function loadYtVideo(videoId) {
+  if (mode !== "youtube") setMode("youtube");
+  ytHomeEl.classList.add("hidden");
+  ytResultsEl.classList.add("hidden");
+  ytWatchEl.classList.remove("hidden");
+  ytWatchEl.innerHTML = `<div class="yt-empty">Loading video…</div>`;
+  setStatus("Loading video…");
+  try {
+    const data = await api(`/yt/video/${encodeURIComponent(videoId)}`);
+    renderYtVideo(data.video || {}, data.related || []);
+    setStatus("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  } catch (e) {
+    ytWatchEl.innerHTML = `<div class="yt-empty">Video failed to load: ${esc(e.message)}</div>`;
+    setStatus("Video failed: " + e.message);
+  }
+}
+function renderYtVideo(video, related) {
+  const watchUrl = `https://www.youtube.com/watch?v=${encodeURIComponent(video.videoId)}`;
+  const embedUrl = `https://www.youtube.com/embed/${encodeURIComponent(video.videoId)}?autoplay=1&rel=0&modestbranding=1`;
+  const embeddable = video.embeddable !== false && video.status !== "ERROR";
+  const meta = [viewText(video.views), dateText(video.publishDate)].filter(Boolean).join(" • ");
+  const avatar = String(video.channel || "?").trim().charAt(0).toUpperCase() || "?";
+  const player = embeddable
+    ? `<iframe src="${esc(embedUrl)}" title="${esc(video.title)}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`
+    : `<div class="yt-fallback"><p>This video can’t be embedded here.</p><a class="yt-action" href="${esc(watchUrl)}" target="_blank" rel="noopener">Watch on YouTube ↗</a></div>`;
+  const description = video.description
+    ? `<div class="yt-description"><b>Description</b>${esc(video.description)}</div>`
+    : "";
+  const relatedHtml = related.length
+    ? related.map(ytRelCard).join("")
+    : `<div class="yt-empty">No related videos found.</div>`;
+  ytWatchEl.innerHTML = `<div class="yt-watch">
+    <div class="yt-watch-main">
+      <div class="yt-watch-player">${player}</div>
+      <h1>${esc(video.title)}</h1>
+      <div class="yt-watch-meta">
+        <span class="yt-avatar">${esc(avatar)}</span>
+        <div class="who"><b>${esc(video.channel || "Unknown channel")}</b><span>${esc(meta)}</span></div>
+      </div>
+      <div class="yt-actions">
+        <button class="yt-action" id="ytPlayAudio">▶ Play audio</button>
+        <button class="yt-action" id="ytCopyLink">Copy link</button>
+        <a class="yt-action" href="${esc(watchUrl)}" target="_blank" rel="noopener">Open on YouTube ↗</a>
+      </div>
+      ${description}
+    </div>
+    <aside class="yt-related"><h3>Up next</h3><div class="yt-related-list">${relatedHtml}</div></aside>
+  </div>`;
+  document.title = `${video.title || "Video"} - YouTube`;
+
+  const audioBtn = $("ytPlayAudio");
+  if (audioBtn) {
+    audioBtn.onclick = () => {
+      const list = [
+        { videoId: video.videoId, title: video.title, sub: video.channel },
+        ...related.map((item) => ({ videoId: item.videoId, title: item.title, sub: item.channel })),
+      ];
+      pushRoute("music");
+      setMode("music");
+      play(video.videoId, video.title, video.channel, list, 0);
+    };
+  }
+  const copyBtn = $("ytCopyLink");
+  if (copyBtn) {
+    copyBtn.onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(location.href);
+        toast("Link copied");
+      } catch { toast("Couldn’t copy link"); }
+    };
+  }
+  ytWatchEl.querySelectorAll(".yt-rel[data-vid]").forEach((card) => {
+    card.onclick = () => openYtVideo(card.dataset.vid);
+  });
+}
+async function doYtSearch() {
+  const q = $("q").value.trim();
+  if (!q) return;
+  saveRecent(q);
+  $("recentPanel").classList.add("hidden");
+  pushRoute("yt");
+  ytHomeEl.classList.add("hidden");
+  ytWatchEl.innerHTML = "";
+  ytWatchEl.classList.add("hidden");
+  ytResultsEl.classList.remove("hidden");
+  setStatus("Searching YouTube…");
+  try {
+    const params = new URLSearchParams({ q, filter: ytFilter, limit: 36 });
+    const data = await api("/yt/search?" + params);
+    const items = data.results || [];
+    const label = ytFilter === "songs" ? "Songs" : "Videos";
+    setStatus(items.length ? `${items.length} ${label.toLowerCase()} for “${q}”` : `No ${label.toLowerCase()} for “${q}”`);
+    ytResultsEl.innerHTML = `<h2 class="yt-section-title">${label} · ${esc(q)}</h2>` +
+      (items.length ? `<div class="yt-grid">${items.map(ytCard).join("")}</div>` : `<div class="yt-empty">No results found.</div>`);
+    bindYtCards(ytResultsEl);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  } catch (e) {
+    setStatus("YouTube search failed: " + e.message);
+  }
+}
+
+document.querySelectorAll("#ytChips .chip").forEach((chip) => {
+  chip.onclick = () => {
+    document.querySelectorAll("#ytChips .chip").forEach((other) => other.classList.remove("active"));
+    chip.classList.add("active");
+    ytFilter = chip.dataset.filter || "videos";
+    if ($("q").value.trim()) doYtSearch();
+  };
+});
+$("modeMusic").onclick = () => {
+  if (mode === "music") return;
+  pushRoute("music");
+  setMode("music");
+};
+$("modeYt").onclick = () => {
+  if (mode === "youtube") {
+    showYtHome();
+    return;
+  }
+  pushRoute("yt");
+  setMode("youtube");
+  showYtHome();
+};
+
+function applyRoute() {
+  const hash = location.hash.replace(/^#/, "");
+  if (hash === "yt" || hash.startsWith("yt/")) {
+    setMode("youtube");
+    if (hash.startsWith("yt/") && hash.length > 3) {
+      loadYtVideo(decodeURIComponent(hash.slice(3)));
+    } else {
+      showYtHome();
+    }
+    return;
+  }
+  setMode("music");
+  try { localStorage.setItem(MODE_KEY, "music"); } catch { /* ignore */ }
+  if (!musicViewReady) {
+    musicViewReady = true;
+    renderContinue();
+    loadHome();
+  }
+}
+
+window.addEventListener("popstate", applyRoute);
+if (!location.hash) {
+  let saved = "music";
+  try { saved = localStorage.getItem(MODE_KEY) || "music"; } catch { /* ignore */ }
+  if (saved === "youtube") history.replaceState(null, "", "#yt");
+}
+applyRoute();

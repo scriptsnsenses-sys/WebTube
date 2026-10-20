@@ -5,6 +5,7 @@ The repo contains code that enables you to host and run efficiently, a web music
 * No ADs
 * Background Music
 * No download required
+* YouTube mode with video search, home feed, and a video watch page
 
 ## API
 Endpoints:
@@ -36,6 +37,15 @@ Watch a music video
 
 (GET) /lyrics
 Fetch the lyrics.
+
+(GET) /yt/home
+YouTube mode home feed (trending videos, new videos, podcasts)
+
+(GET) /yt/search
+Search YouTube videos or songs
+
+(GET) /yt/video/{video_id}
+Video details and related videos for the watch page
 ```
 Complete docs at the /docs endpoint, or you can use my hosted version: https://ytmusicapi-83b8.onrender.com/docs
 

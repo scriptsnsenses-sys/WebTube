@@ -15,11 +15,15 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="/static/styles.css?v=5" />
+<link rel="stylesheet" href="/static/styles.css?v=6" />
 </head>
 <body>
 <header class="topbar">
-  <a class="brand" href="#" id="brandHome"><span class="logo">▶</span><span>YTMusic<em>player</em></span></a>
+  <a class="brand" href="#" id="brandHome"><span class="logo">▶</span><span id="brandLabel">YTMusic<em>player</em></span></a>
+  <div class="mode-switch" role="tablist" aria-label="Player mode">
+    <button id="modeMusic" class="mode-btn active" role="tab" aria-selected="true">Music</button>
+    <button id="modeYt" class="mode-btn" role="tab" aria-selected="false">YouTube</button>
+  </div>
   <div class="search-wrap">
     <div class="search-box">
       <input id="q" type="text" placeholder="Search" autocomplete="off" />
@@ -45,12 +49,24 @@
   <button class="chip" data-filter="playlists">Playlists</button>
 </div>
 
+<div class="chips hidden" id="ytChips">
+  <button class="chip active" data-filter="videos">Videos</button>
+  <button class="chip" data-filter="songs">Songs</button>
+</div>
+
 <main id="main">
   <div id="status"></div>
-  <section id="continue"></section>
-  <section id="detail"></section>
-  <section id="results"></section>
-  <section id="home"></section>
+  <div id="musicView">
+    <section id="continue"></section>
+    <section id="detail"></section>
+    <section id="results"></section>
+    <section id="home"></section>
+  </div>
+  <section id="youtubeView" class="hidden">
+    <div id="ytHome"></div>
+    <div id="ytResults"></div>
+    <article id="ytWatch" class="hidden"></article>
+  </section>
 </main>
 
 <div id="sheet" class="sheet hidden">
@@ -104,6 +120,6 @@ if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {}));
 }
 </script>
-<script src="/static/app.js?v=5"></script>
+<script src="/static/app.js?v=6"></script>
 </body>
 </html>

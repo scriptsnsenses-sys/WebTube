@@ -1,9 +1,9 @@
 /* YTMusic Player service worker — app-shell caching only. API calls pass through. */
-const CACHE = "ytm-shell-v1";
+const CACHE = "ytm-shell-v2";
 const SHELL = [
   "/",
-  "/static/styles.css?v=5",
-  "/static/app.js?v=5",
+  "/static/styles.css?v=6",
+  "/static/app.js?v=6",
   "/manifest.webmanifest",
   "/static/icons/icon-192.png",
   "/static/icons/icon-512.png",

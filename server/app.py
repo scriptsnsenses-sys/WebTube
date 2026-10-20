@@ -104,6 +104,74 @@ def _call(fn, *args, **kwargs):
         raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}")
 
 
+def _safe_call(fn, *args, **kwargs):
+    try:
+        return _call(fn, *args, **kwargs)
+    except HTTPException:
+        return None
+
+
+def _yt_artists(item):
+    return [a.get("name") for a in (item.get("artists") or []) if a.get("name")]
+
+
+def _yt_video(item):
+    if not isinstance(item, dict):
+        return None
+    video_id = item.get("videoId")
+    if not video_id and isinstance(item.get("counterpart"), dict):
+        item = item["counterpart"]
+        video_id = item.get("videoId")
+    if not video_id:
+        return None
+    artists = _yt_artists(item)
+    channel = item.get("author") or (artists[0] if artists else "")
+    if not channel and isinstance(item.get("podcast"), dict):
+        channel = item["podcast"].get("name") or ""
+    return {
+        "videoId": video_id,
+        "title": item.get("title") or video_id,
+        "channel": channel,
+        "artists": artists,
+        "views": item.get("views"),
+        "duration": item.get("duration") or item.get("length"),
+        "videoType": item.get("videoType"),
+        "thumbnail": f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg",
+        "isLive": bool(item.get("isLive")),
+        "isAvailable": item.get("isAvailable") is not False,
+    }
+
+
+def _yt_videos(items, limit=24):
+    videos = []
+    seen = set()
+    for item in items or []:
+        video = _yt_video(item)
+        if video and video["videoId"] not in seen:
+            seen.add(video["videoId"])
+            videos.append(video)
+            if len(videos) >= limit:
+                break
+    return videos
+
+
+def _yt_section(title, items, limit=24):
+    videos = _yt_videos(items, limit=limit)
+    return {"title": title, "videos": videos} if videos else None
+
+
+def _format_duration(seconds):
+    try:
+        seconds = int(seconds)
+    except (TypeError, ValueError):
+        return None
+    if seconds <= 0:
+        return None
+    minutes, seconds = divmod(seconds, 60)
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours}:{minutes:02d}:{seconds:02d}" if hours else f"{minutes}:{seconds:02d}"
+
+
 @app.get("/")
 def root():
     index = STATIC_DIR / "index.html"
@@ -127,6 +195,9 @@ def api_info():
             "/playlist/{playlistId}",
             "/watch",
             "/lyrics",
+            "/yt/home",
+            "/yt/search",
+            "/yt/video/{videoId}",
         ],
     }
 
@@ -151,6 +222,99 @@ def search(
 @app.get("/home")
 def home(limit: int = Query(3, ge=1, le=10)):
     return JSONResponse(_call(get_client().get_home, limit=limit))
+
+
+@app.get("/yt/home")
+def yt_home(limit: int = Query(24, ge=1, le=40)):
+    yt = get_client()
+    explore = _call(yt.get_explore)
+    trending = explore.get("trending") or {}
+    sections = [
+        _yt_section("Trending now", trending.get("items") if isinstance(trending, dict) else [], limit),
+        _yt_section("New music videos", explore.get("new_videos"), limit),
+        _yt_section("Podcasts & episodes", explore.get("top_episodes"), limit),
+    ]
+    sections = [section for section in sections if section]
+    if not sections:
+        rows = _call(yt.get_home, limit=5)
+        sections = [
+            _yt_section(row.get("title") or "Recommended", row.get("contents"), limit)
+            for row in rows
+        ]
+        sections = [section for section in sections if section]
+    return JSONResponse({"sections": sections})
+
+
+@app.get("/yt/search")
+def yt_search(
+    q: str = Query(..., min_length=1, description="Search query"),
+    filter: str = Query("videos", description="videos|songs"),
+    limit: int = Query(30, ge=1, le=100),
+    ignore_spelling: bool = False,
+):
+    if filter not in {"videos", "songs"}:
+        raise HTTPException(status_code=400, detail="filter must be 'videos' or 'songs'")
+    items = _call(get_client().search, q, filter=filter, limit=limit, ignore_spelling=ignore_spelling)
+    return JSONResponse({"query": q, "filter": filter, "results": _yt_videos(items, limit=limit)})
+
+
+@app.get("/yt/video/{video_id}")
+def yt_video(video_id: str, related_limit: int = Query(15, ge=0, le=30)):
+    yt = get_client()
+    raw = _call(yt.get_song, video_id)
+    details = raw.get("videoDetails") or {}
+    micro = (raw.get("microformat") or {}).get("microformatDataRenderer") or {}
+    playability = raw.get("playabilityStatus") or {}
+    artists = _yt_artists(details)
+    channel = details.get("author") or (artists[0] if artists else "")
+    is_live = bool(details.get("isLive"))
+    thumbs = (micro.get("thumbnail") or {}).get("thumbnails") or (details.get("thumbnail") or {}).get("thumbnails") or []
+    thumbnail = thumbs[-1]["url"] if thumbs else f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
+
+    related = []
+    seen = {video_id}
+
+    def collect(items):
+        for item in items or []:
+            video = _yt_video(item)
+            if video and video["videoId"] not in seen and len(related) < related_limit:
+                seen.add(video["videoId"])
+                related.append(video)
+
+    watch = _safe_call(yt.get_watch_playlist, videoId=video_id, limit=min(25, related_limit + 5)) if related_limit else None
+    if watch:
+        related_id = watch.get("related")
+        if related_id:
+            sections = _safe_call(yt.get_song_related, related_id) or []
+            for section in sections:
+                if isinstance(section, dict):
+                    collect(section.get("contents"))
+        collect(watch.get("tracks"))
+
+    if related_limit and not related:
+        query = " ".join(part for part in [details.get("title"), channel] if part)
+        if query:
+            collect(_safe_call(yt.search, query, filter="videos", limit=related_limit + 1))
+
+    publish_date = micro.get("publishDate") or micro.get("uploadDate") or ""
+    if str(publish_date).startswith(("1969", "1970")):
+        publish_date = ""
+    video = {
+        "videoId": video_id,
+        "title": details.get("title") or micro.get("title") or video_id,
+        "channel": channel,
+        "channelId": details.get("channelId") or "",
+        "artists": artists,
+        "description": micro.get("description") or "",
+        "views": details.get("viewCount"),
+        "duration": "LIVE" if is_live else _format_duration(details.get("lengthSeconds")),
+        "isLive": is_live,
+        "thumbnail": thumbnail,
+        "publishDate": publish_date,
+        "embeddable": playability.get("playableInEmbed") is not False,
+        "status": playability.get("status") or "",
+    }
+    return JSONResponse({"video": video, "related": related[:related_limit]})
 
 
 @app.get("/artist/{channel_id}")
