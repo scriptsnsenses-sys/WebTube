@@ -669,6 +669,7 @@ function stopYtVideo() {
   ytWatchEl.classList.add("hidden");
 }
 function setMode(next) {
+  if (next !== "yt") stopYtPlayback();
   if (next === mode) return;
   mode = next;
   try { localStorage.setItem(MODE_KEY, mode); } catch { /* ignore */ }
@@ -779,15 +780,19 @@ async function loadYtVideo(videoId) {
     setStatus("Video failed: " + e.message);
   }
 }
+function stopYtPlayback() {
+  document.querySelectorAll("#ytVideo, #ytAudio").forEach((el) => {
+    el.pause();
+    el.removeAttribute("src");
+    el.load();
+  });
+}
 function renderYtVideo(video, related) {
+  stopYtPlayback();
   const watchUrl = `https://www.youtube.com/watch?v=${encodeURIComponent(video.videoId)}`;
-  const embedUrl = `https://www.youtube.com/embed/${encodeURIComponent(video.videoId)}?autoplay=1&rel=0&modestbranding=1`;
-  const embeddable = video.embeddable !== false && video.status !== "ERROR";
   const meta = [viewText(video.views), dateText(video.publishDate)].filter(Boolean).join(" • ");
   const avatar = String(video.channel || "?").trim().charAt(0).toUpperCase() || "?";
-  const player = embeddable
-    ? `<iframe src="${esc(embedUrl)}" title="${esc(video.title)}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`
-    : `<div class="yt-fallback"><p>This video can’t be embedded here.</p><a class="yt-action" href="${esc(watchUrl)}" target="_blank" rel="noopener">Watch on YouTube ↗</a></div>`;
+  const player = `<div class="yt-player-host" id="ytPlayer"><div class="yt-player-loading">Loading video…</div></div>`;
   const description = video.description
     ? `<div class="yt-description"><b>Description</b>${esc(video.description)}</div>`
     : "";
@@ -837,8 +842,57 @@ function renderYtVideo(video, related) {
   ytWatchEl.querySelectorAll(".yt-rel[data-vid]").forEach((card) => {
     card.onclick = () => openYtVideo(card.dataset.vid);
   });
+  setupYtPlayback(video.videoId, watchUrl);
+}
+async function setupYtPlayback(videoId, watchUrl) {
+  const host = $("ytPlayer");
+  if (!host) return;
+  const fallback = (message) => {
+    host.innerHTML = `<div class="yt-fallback"><p>${esc(message)}</p><a class="yt-action" href="${esc(watchUrl)}" target="_blank" rel="noopener">Open on YouTube ↗</a></div>`;
+  };
+  try {
+    const data = await api(`/yt/streams/${encodeURIComponent(videoId)}`);
+    const streams = data.streams || {};
+    if (streams.video && streams.audio) {
+      host.innerHTML = `
+        <video id="ytVideo" controls autoplay playsinline preload="metadata" src="${esc(streams.video)}"></video>
+        <audio id="ytAudio" preload="auto" src="${esc(streams.audio)}"></audio>
+        <button class="yt-sound-note hidden" id="ytSoundNote" type="button">Click to enable sound</button>`;
+      const video = $("ytVideo"), audio = $("ytAudio"), note = $("ytSoundNote");
+      const playAudio = () => {
+        audio.play().then(() => note.classList.add("hidden")).catch(() => note.classList.remove("hidden"));
+      };
+      video.addEventListener("loadedmetadata", () => { audio.currentTime = video.currentTime; });
+      video.addEventListener("play", playAudio);
+      video.addEventListener("pause", () => audio.pause());
+      video.addEventListener("seeking", () => { audio.currentTime = video.currentTime; });
+      video.addEventListener("ratechange", () => { audio.playbackRate = video.playbackRate; });
+      video.addEventListener("volumechange", () => { audio.volume = video.volume; audio.muted = video.muted; });
+      video.addEventListener("waiting", () => audio.pause());
+      video.addEventListener("playing", () => { if (audio.paused) playAudio(); });
+      video.addEventListener("timeupdate", () => {
+        if (audio.readyState >= 1 && Math.abs(audio.currentTime - video.currentTime) > 0.3) {
+          audio.currentTime = video.currentTime;
+        }
+      });
+      video.addEventListener("ended", () => audio.pause());
+      video.addEventListener("error", () => fallback("Playback failed. Open on YouTube."));
+      note.onclick = playAudio;
+      if (!video.paused) playAudio();
+      return;
+    }
+    if (streams.muxed) {
+      host.innerHTML = `<video id="ytVideo" controls autoplay playsinline preload="metadata" src="${esc(streams.muxed)}"></video>`;
+      $("ytVideo").addEventListener("error", () => fallback("Playback failed. Open on YouTube."));
+      return;
+    }
+    fallback("No playable streams found for this video.");
+  } catch (e) {
+    fallback(e.message || "Video failed to load.");
+  }
 }
 async function doYtSearch() {
+  stopYtPlayback();
   const q = $("q").value.trim();
   if (!q) return;
   saveRecent(q);

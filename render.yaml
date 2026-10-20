@@ -5,13 +5,15 @@ services:
     name: ytmusicapi
     runtime: python
     plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn server.app:app --host 0.0.0.0 --port $PORT
+    buildCommand: pip install -r requirements.txt && bash build-bridge.sh
+    startCommand: bash start.sh
     healthCheckPath: /health
     autoDeploy: true
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.9
+      - key: DOTNET_CLI_TELEMETRY_OPTOUT
+        value: "1"
       - key: YTMUSIC_LANGUAGE
         value: en
       # Optional auth: paste JSON or set a file path.
@@ -21,4 +23,7 @@ services:
       - key: YTMUSIC_AUTH_FILE
         sync: false
       - key: YTMUSIC_LOCATION
+        sync: false
+      # Optional: YouTube cookies for the YoutubeExplode bridge (bot-check mitigation).
+      - key: YOUTUBE_COOKIE
         sync: false

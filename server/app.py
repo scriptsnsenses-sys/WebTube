@@ -77,6 +77,8 @@ def api_info():
             "/yt/home",
             "/yt/search",
             "/yt/video/{video_id}",
+            "/yt/streams/{video_id}",
+            "/yt/stream/{video_id}/{kind}",
         ],
     }
 

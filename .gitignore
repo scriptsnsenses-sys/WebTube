@@ -18,3 +18,7 @@ dist
 *.log
 *.xml
 .env
+.dotnet/
+bridge-out/
+youtube-bridge/**/bin/
+youtube-bridge/**/obj/

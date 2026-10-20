@@ -58,6 +58,12 @@ Search YouTube videos or songs
 
 (GET) /yt/video/{video_id}
 Video details and related videos for the watch page
+
+(GET) /yt/streams/{video_id}
+Playable stream URLs for a video
+
+(GET) /yt/stream/{video_id}/{kind}
+Proxied video/audio stream (kind: video, audio, or muxed)
 ```
 Complete docs at the `/docs` endpoint, or use the hosted WebTube instance: https://ytmusicapi-83b8.onrender.com/docs
 
@@ -65,6 +71,16 @@ Hosted WebTube URL: https://ytmusicapi-83b8.onrender.com
 {You can use it for free forever, unlimited}
 
 **Note: WebTube is hosted on Render and falls asleep after 15 minutes without activity. The first request may take around 30–50 seconds while the app wakes up; later requests are fast. Sorry for the inconvenience.**
+
+### YouTube playback (YoutubeExplode bridge)
+
+Video mode resolves streams through a small ASP.NET Core bridge in `youtube-bridge/` that uses [YoutubeExplode](https://github.com/Tyrrrz/YoutubeExplode). Run it locally:
+
+```bash
+dotnet run --project youtube-bridge/WebTube.YoutubeBridge --urls http://127.0.0.1:5001
+```
+
+Then start the API as usual (the default `YOUTUBE_BRIDGE_URL` is `http://127.0.0.1:5001`). On Render, `build-bridge.sh` installs the .NET 10 SDK and publishes `bridge-out/`, and `start.sh` runs the bridge and Uvicorn together. If YouTube demands verification, set `YOUTUBE_COOKIE` to a cookie header string for the bridge.
 
 Credits:
 ```
